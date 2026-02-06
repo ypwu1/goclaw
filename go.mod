@@ -3,9 +3,11 @@ module github.com/smallnest/dogclaw/goclaw
 go 1.24.4
 
 require (
+	github.com/chzyer/readline v1.5.1
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/hashicorp/go-version v1.6.0
 	github.com/larksuite/oapi-sdk-go/v3 v3.5.3
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.19.0
@@ -15,7 +17,6 @@ require (
 )
 
 require (
-	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
