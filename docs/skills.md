@@ -1,6 +1,8 @@
 # goclaw Skills 系统设计方案
 
 > 参考 OpenClaw 的 Skills 机制，为 goclaw 设计一套遵循 [AgentSkills](https://agentskills.io) 规范的技能系统。
+>
+> **测试文档**: 参见 [Skills_Test.md](./Skills_Test.md) 查看完整的测试步骤和方法。
 
 ## 设计理念
 
@@ -668,12 +670,6 @@ goclaw skills update [skill-name]
 # 卸载技能
 goclaw skills uninstall [skill-name]
 
-# ========== 技能创建 ==========
-# 创建新技能骨架
-goclaw skills create my-new-skill
-
-# 编辑技能
-goclaw skills edit my-skill
 
 # ========== 调试 ==========
 # 打印完整 System Prompt

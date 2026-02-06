@@ -26,8 +26,14 @@ var chatCmd = &cobra.Command{
 	Run:   runChat,
 }
 
+var (
+	chatDebugPrompt bool
+	chatLogLevel    string
+)
+
 func init() {
-	// 在 init 中已添加
+	chatCmd.Flags().BoolVar(&chatDebugPrompt, "debug-prompt", false, "Print the full system prompt including injected skills")
+	chatCmd.Flags().StringVar(&chatLogLevel, "log-level", "info", "Log level (debug, info, warn, error)")
 }
 
 // runChat 交互式聊天
@@ -40,7 +46,11 @@ func runChat(cmd *cobra.Command, args []string) {
 	}
 
 	// 初始化日志
-	if err := logger.Init("info", false); err != nil {
+	logLevel := chatLogLevel
+	if logLevel == "" {
+		logLevel = "info"
+	}
+	if err := logger.Init(logLevel, false); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
 		os.Exit(1)
 	}
@@ -150,6 +160,16 @@ func runChat(cmd *cobra.Command, args []string) {
 
 	// 主循环
 	reader := bufio.NewReader(os.Stdin)
+
+	// 如果开启 debug-prompt，打印完整的 system prompt
+	if chatDebugPrompt {
+		fmt.Println("=== Debug: System Prompt ===")
+		skills := skillsLoader.List()
+		systemPrompt := contextBuilder.BuildSystemPrompt(skills)
+		fmt.Println(systemPrompt)
+		fmt.Println("=== End of System Prompt ===\n")
+	}
+
 	for {
 		// 读取输入
 		fmt.Print("➤ ")
