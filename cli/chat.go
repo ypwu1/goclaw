@@ -105,6 +105,9 @@ func runChat(cmd *cobra.Command, args []string) {
 		_ = toolRegistry.Register(tool)
 	}
 
+	// 注册 use_skill 工具（用于两阶段技能加载）
+	_ = toolRegistry.Register(tools.NewUseSkillTool())
+
 	// 注册 Shell 工具
 	shellTool := tools.NewShellTool(
 		cfg.Tools.Shell.Enabled,
@@ -127,6 +130,13 @@ func runChat(cmd *cobra.Command, args []string) {
 	for _, tool := range webTool.GetTools() {
 		_ = toolRegistry.Register(tool)
 	}
+
+	// 注册智能搜索工具（支持 web search 失败时自动回退到 Google browser 搜索）
+	browserTimeout := 30
+	if cfg.Tools.Browser.Timeout > 0 {
+		browserTimeout = cfg.Tools.Browser.Timeout
+	}
+	_ = toolRegistry.Register(tools.NewSmartSearch(webTool, true, browserTimeout).GetTool())
 
 	// 注册浏览器工具（如果启用）
 	if cfg.Tools.Browser.Enabled {
@@ -182,12 +192,13 @@ func runChat(cmd *cobra.Command, args []string) {
 		fmt.Println("=== End of System Prompt ===")
 	}
 
-	// 主循环 - 使用 bubbletea 输入（支持中文宽字符）
-	var history []string
+	// 主循环 - 使用 bubbletea 输入（支持中文宽字符和历史记录）
+	var history []string       // 历史输入记录
+	var inputHistory []string  // 用于上下键浏览的历史
 
 	for {
-		// 读取输入
-		input, err := input.ReadLine("➤ ")
+		// 读取输入（传入历史记录支持上下键浏览）
+		input, err := input.ReadLineWithHistory("➤ ", inputHistory)
 		if err != nil {
 			// 用户按 Ctrl+C 或 Ctrl+D
 			fmt.Println("\nGoodbye!")
@@ -218,7 +229,13 @@ func runChat(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		// 保存到历史记录
+		// 添加到历史记录（用于上下键浏览）
+		// 避免重复添加相同的最后一条记录
+		if len(inputHistory) == 0 || inputHistory[len(inputHistory)-1] != input {
+			inputHistory = append(inputHistory, input)
+		}
+
+		// 保存到历史记录（用于其他用途）
 		if input != "" {
 			history = append(history, input)
 		}
@@ -265,6 +282,9 @@ func runAgentIteration(
 	iteration := 0
 	var lastResponse string
 
+	// 获取已加载的技能名称（从会话元数据中）
+	loadedSkills := getLoadedSkills(sess)
+
 	for iteration < maxIterations {
 		iteration++
 
@@ -276,7 +296,7 @@ func runAgentIteration(
 
 		// 构建消息
 		history := sess.GetHistory(50)
-		messages := contextBuilder.BuildMessages(history, "", skills)
+		messages := contextBuilder.BuildMessages(history, "", skills, loadedSkills)
 		providerMessages := make([]providers.Message, len(messages))
 		for i, msg := range messages {
 			var tcs []providers.ToolCall
@@ -332,13 +352,25 @@ func runAgentIteration(
 			})
 
 			// 执行工具调用
+			hasNewSkill := false
 			for _, tc := range response.ToolCalls {
-				fmt.Printf("[Tool: %s]\n", tc.Name)
+				// 使用 fmt.Fprint 而不是 fmt.Printf，避免换行干扰
+				fmt.Fprint(os.Stderr, ".") // 简单的点号表示正在执行工具
 				result, err := toolRegistry.Execute(ctx, tc.Name, tc.Params)
 				if err != nil {
 					result = fmt.Sprintf("Error: %v", err)
 				}
-				fmt.Printf("[Result: %s]\n", truncateString(result, 200))
+				fmt.Fprint(os.Stderr, "") // 刷新输出
+
+				// 检查是否是 use_skill 工具
+				if tc.Name == "use_skill" {
+					hasNewSkill = true
+					// 提取技能名称
+					if skillName, ok := tc.Params["skill_name"].(string); ok {
+						loadedSkills = append(loadedSkills, skillName)
+						setLoadedSkills(sess, loadedSkills)
+					}
+				}
 
 				// 添加工具结果到会话
 				sess.AddMessage(session.Message{
@@ -349,6 +381,11 @@ func runAgentIteration(
 						"tool_name": tc.Name,
 					},
 				})
+			}
+
+			// 如果加载了新技能，继续迭代让 LLM 获取完整内容
+			if hasNewSkill {
+				continue
 			}
 
 			// 继续下一次迭代
@@ -363,10 +400,21 @@ func runAgentIteration(
 	return lastResponse, nil
 }
 
-// truncateString 截断字符串
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
+// getLoadedSkills 从会话中获取已加载的技能名称
+func getLoadedSkills(sess *session.Session) []string {
+	if sess.Metadata == nil {
+		return []string{}
 	}
-	return s[:maxLen] + "..."
+	if v, ok := sess.Metadata["loaded_skills"].([]string); ok {
+		return v
+	}
+	return []string{}
+}
+
+// setLoadedSkills 设置会话中已加载的技能名称
+func setLoadedSkills(sess *session.Session, skills []string) {
+	if sess.Metadata == nil {
+		sess.Metadata = make(map[string]interface{})
+	}
+	sess.Metadata["loaded_skills"] = skills
 }

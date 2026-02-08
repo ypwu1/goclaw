@@ -124,6 +124,11 @@ func runStart(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// 注册 use_skill 工具（用于两阶段技能加载）
+	if err := toolRegistry.Register(tools.NewUseSkillTool()); err != nil {
+		logger.Warn("Failed to register use_skill tool", zap.Error(err))
+	}
+
 	// 注册 Shell 工具
 	shellTool := tools.NewShellTool(
 		cfg.Tools.Shell.Enabled,
@@ -149,6 +154,15 @@ func runStart(cmd *cobra.Command, args []string) {
 		if err := toolRegistry.Register(tool); err != nil {
 			logger.Warn("Failed to register tool", zap.String("tool", tool.Name()))
 		}
+	}
+
+	// 注册智能搜索工具（支持 web search 失败时自动回退到 Google browser 搜索）
+	browserTimeout := 30
+	if cfg.Tools.Browser.Timeout > 0 {
+		browserTimeout = cfg.Tools.Browser.Timeout
+	}
+	if err := toolRegistry.Register(tools.NewSmartSearch(webTool, true, browserTimeout).GetTool()); err != nil {
+		logger.Warn("Failed to register smart_search tool", zap.Error(err))
 	}
 
 	// 注册浏览器工具（如果启用）

@@ -228,6 +228,9 @@ func (l *Loop) runIteration(ctx context.Context, sess *session.Session) (string,
 	iteration := 0
 	var lastResponse string
 
+	// 获取已加载的技能名称（从会话元数据中）
+	loadedSkills := l.getLoadedSkills(sess)
+
 	for iteration < l.maxIteration {
 		iteration++
 
@@ -241,7 +244,7 @@ func (l *Loop) runIteration(ctx context.Context, sess *session.Session) (string,
 
 		// 构建上下文
 		history := sess.GetHistory(50)
-		messages := l.context.BuildMessages(history, "", skills)
+		messages := l.context.BuildMessages(history, "", skills, loadedSkills)
 
 		providerMessages := make([]providers.Message, len(messages))
 		for i, msg := range messages {
@@ -266,12 +269,14 @@ func (l *Loop) runIteration(ctx context.Context, sess *session.Session) (string,
 		var toolDefs []providers.ToolDefinition
 		if l.tools != nil {
 			toolList := l.tools.List()
+			logger.Info("Preparing tool definitions", zap.Int("tool_count", len(toolList)))
 			for _, t := range toolList {
 				toolDefs = append(toolDefs, providers.ToolDefinition{
 					Name:        t.Name(),
 					Description: t.Description(),
 					Parameters:  t.Parameters(),
 				})
+				logger.Debug("Tool definition", zap.String("name", t.Name()), zap.String("description", t.Description()))
 			}
 		}
 
@@ -280,6 +285,10 @@ func (l *Loop) runIteration(ctx context.Context, sess *session.Session) (string,
 		if err != nil {
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}
+
+		logger.Info("LLM response received",
+			zap.Int("tool_calls_count", len(response.ToolCalls)),
+			zap.Int("content_length", len(response.Content)))
 
 		// 检查是否有工具调用
 		if len(response.ToolCalls) > 0 {
@@ -300,10 +309,21 @@ func (l *Loop) runIteration(ctx context.Context, sess *session.Session) (string,
 			})
 
 			// 执行工具调用
+			hasNewSkill := false
 			for _, tc := range response.ToolCalls {
 				result, err := l.tools.Execute(ctx, tc.Name, tc.Params)
 				if err != nil {
 					result = fmt.Sprintf("Error: %v", err)
+				}
+
+				// 检查是否是 use_skill 工具
+				if tc.Name == "use_skill" {
+					hasNewSkill = true
+					// 提取技能名称
+					if skillName, ok := tc.Params["skill_name"].(string); ok {
+						loadedSkills = append(loadedSkills, skillName)
+						l.setLoadedSkills(sess, loadedSkills)
+					}
 				}
 
 				// 添加工具结果到会话
@@ -316,6 +336,11 @@ func (l *Loop) runIteration(ctx context.Context, sess *session.Session) (string,
 						"tool_name": tc.Name,
 					},
 				})
+			}
+
+			// 如果加载了新技能，继续迭代让 LLM 获取完整内容
+			if hasNewSkill {
+				continue
 			}
 
 			// 继续下一次迭代
@@ -332,6 +357,25 @@ func (l *Loop) runIteration(ctx context.Context, sess *session.Session) (string,
 	}
 
 	return lastResponse, nil
+}
+
+// getLoadedSkills 从会话中获取已加载的技能名称
+func (l *Loop) getLoadedSkills(sess *session.Session) []string {
+	if sess.Metadata == nil {
+		return []string{}
+	}
+	if v, ok := sess.Metadata["loaded_skills"].([]string); ok {
+		return v
+	}
+	return []string{}
+}
+
+// setLoadedSkills 设置会话中已加载的技能名称
+func (l *Loop) setLoadedSkills(sess *session.Session, skills []string) {
+	if sess.Metadata == nil {
+		sess.Metadata = make(map[string]interface{})
+	}
+	sess.Metadata["loaded_skills"] = skills
 }
 
 // generateSummary 生成子代理结果的总结

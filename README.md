@@ -22,6 +22,29 @@ goclaw 引入了先进的技能系统，允许用户通过编写 Markdown 文档
 
 ### 使用方法
 
+#### 配置文件加载优先级
+
+goclaw 按以下顺序查找配置文件（找到第一个即使用）：
+
+1. `~/.goclaw/config.json` (用户全局目录，**最高优先级**)
+2. `./config.json` (当前目录)
+
+可通过 `--config` 参数指定配置文件路径覆盖默认行为。
+
+#### Skills 加载顺序
+
+技能按以下顺序加载，**同名技能后面的会覆盖前面的**：
+
+| 顺序 | 路径 | 说明 |
+|-----|------|------|
+| 1 | `传入的自定义目录` | 通过 `NewSkillsLoader()` 指定 |
+| 2 | `workspace/skills/` | 工作区目录 |
+| 3 | `workspace/.goclaw/skills/` | 工作区隐藏目录 |
+| 4 | `<可执行文件路径>/skills/` | 可执行文件同级目录 |
+| 5 | `./skills/` (当前目录) | **最后加载，优先级最高** |
+
+默认 `workspace` 为 `~/.goclaw/workspace`。
+
 1.  **列出可用技能**
     ```bash
     ./goclaw skills list
@@ -29,7 +52,7 @@ goclaw 引入了先进的技能系统，允许用户通过编写 Markdown 文档
 
 2.  **安装技能**
     将技能文件夹放入以下任一位置：
-    *   `./skills/` (随附目录，最高优先级)
+    *   `./skills/` (当前目录，最高优先级)
     *   `${WORKSPACE}/skills/` (工作区目录)
     *   `~/.goclaw/skills/` (用户全局目录)
 

@@ -142,6 +142,13 @@ func (p *OpenAIProvider) Chat(ctx context.Context, messages []Message, tools []T
 	// 解析工具调用
 	var toolCalls []ToolCall
 	if len(completion.Choices) > 0 {
+		// 记录是否有工具调用
+		if len(completion.Choices[0].ToolCalls) > 0 {
+			fmt.Printf("DEBUG: Found %d tool calls from LLM\n", len(completion.Choices[0].ToolCalls))
+			for _, tc := range completion.Choices[0].ToolCalls {
+				fmt.Printf("DEBUG: Tool call - ID: %s, Name: %s, Args: %s\n", tc.ID, tc.FunctionCall.Name, tc.FunctionCall.Arguments)
+			}
+		}
 		for _, tc := range completion.Choices[0].ToolCalls {
 			var params map[string]interface{}
 			if err := json.Unmarshal([]byte(tc.FunctionCall.Arguments), &params); err != nil {

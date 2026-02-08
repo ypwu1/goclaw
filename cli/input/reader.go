@@ -2,69 +2,45 @@ package input
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"github.com/chzyer/readline"
 )
-
-// readModel 输入模型
-type readModel struct {
-	textInput textinput.Model
-	quitting  bool
-}
-
-func (m readModel) Init() tea.Cmd {
-	return textinput.Blink
-}
-
-func (m readModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyCtrlC:
-			m.quitting = true
-			return m, tea.Quit
-		case tea.KeyEnter:
-			return m, tea.Quit
-		}
-	}
-
-	m.textInput, cmd = m.textInput.Update(msg)
-	return m, cmd
-}
-
-func (m readModel) View() string {
-	if m.quitting {
-		return ""
-	}
-	return m.textInput.View()
-}
 
 // ReadLine 读取一行输入（支持中文）
 func ReadLine(prompt string) (string, error) {
-	ti := textinput.New()
-	ti.Prompt = prompt
-	ti.Placeholder = ""
-	ti.Focus()
+	return ReadLineWithHistory(prompt, nil)
+}
 
-	m := readModel{textInput: ti}
+// ReadLineWithHistory 读取一行输入（支持历史记录）
+func ReadLineWithHistory(prompt string, history []string) (string, error) {
+	cfg := &readline.Config{
+		Prompt:          prompt,
+		HistoryLimit:    1000,
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+	}
 
-	p := tea.NewProgram(m, tea.WithOutput(os.Stderr))
-	finalModel, err := p.Run()
+	rl, err := readline.NewEx(cfg)
 	if err != nil {
 		return "", err
 	}
+	defer rl.Close()
 
-	rm, ok := finalModel.(readModel)
-	if !ok {
-		return "", nil
-	}
-	if rm.quitting {
-		return "", fmt.Errorf("interrupted")
+	// 添加历史记录
+	for _, h := range history {
+		if h != "" {
+			rl.SaveHistory(h)
+		}
 	}
 
-	return rm.textInput.Value(), nil
+	// 读取输入
+	line, err := rl.Readline()
+	if err != nil {
+		if err == readline.ErrInterrupt {
+			return "", fmt.Errorf("interrupted")
+		}
+		return "", err
+	}
+
+	return line, nil
 }

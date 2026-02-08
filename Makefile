@@ -1,7 +1,7 @@
 .PHONY: build clean run test install docker-build docker-run docker-compose-up docker-compose-down docker-compose-logs
 
 BINARY_NAME=goclaw
-BUILD_DIR=bin
+BUILD_DIR=.
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 DOCKER_IMAGE=goclaw
 DOCKER_TAG=$(VERSION)
