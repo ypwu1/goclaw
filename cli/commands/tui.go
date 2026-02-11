@@ -227,6 +227,7 @@ func runTUI(cmd *cobra.Command, args []string) {
 	// Import the chat command registry for slash commands
 	// nolint:typecheck
 	cmdRegistry := NewCommandRegistry()
+	cmdRegistry.SetSessionManager(sessionMgr)
 
 	// Create persistent readline instance for history navigation
 	rl, err := input.NewReadline("➤ ")

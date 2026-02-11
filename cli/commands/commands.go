@@ -2,13 +2,18 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/chzyer/readline"
 	"github.com/manifoldco/promptui"
+	"github.com/smallnest/dogclaw/goclaw/session"
 )
 
 // SpecialMarker 是用于触发菜单选择的特殊标记
@@ -33,9 +38,10 @@ type ArgSpec struct {
 
 // CommandRegistry 命令注册表
 type CommandRegistry struct {
-	commands map[string]*Command
-	homeDir  string
-	menuMode bool // 是否在菜单选择模式
+	commands    map[string]*Command
+	homeDir     string
+	menuMode    bool // 是否在菜单选择模式
+	sessionMgr  *session.Manager
 }
 
 // NewCommandRegistry 创建命令注册表
@@ -47,6 +53,16 @@ func NewCommandRegistry() *CommandRegistry {
 	}
 	registry.registerBuiltInCommands()
 	return registry
+}
+
+// SetSessionManager 设置会话管理器
+func (r *CommandRegistry) SetSessionManager(mgr *session.Manager) {
+	r.sessionMgr = mgr
+}
+
+// GetSessionManager 获取会话管理器
+func (r *CommandRegistry) GetSessionManager() *session.Manager {
+	return r.sessionMgr
 }
 
 // registerBuiltInCommands 注册内置命令
@@ -200,6 +216,16 @@ func (r *CommandRegistry) registerBuiltInCommands() {
 			return strings.Join(result, "  "), false
 		},
 	})
+
+	// /status - 显示状态
+	r.Register(&Command{
+		Name:        "status",
+		Usage:       "/status",
+		Description: "Show session and gateway status",
+		Handler: func(args []string) (string, bool) {
+			return r.handleStatus(args), false
+		},
+	})
 }
 
 // Register 注册命令
@@ -274,6 +300,142 @@ func (r *CommandRegistry) buildHelp(args []string) string {
 		sb.WriteString(fmt.Sprintf("  %s  %s\n", cmd.Usage, cmd.Description))
 	}
 	return sb.String()
+}
+
+// handleStatus 处理 status 命令
+func (r *CommandRegistry) handleStatus(args []string) string {
+	var sb strings.Builder
+	sb.WriteString("=== goclaw Status ===\n\n")
+
+	// Gateway status
+	gatewayStatus := r.checkGatewayStatus(5)
+	sb.WriteString("Gateway:\n")
+	if gatewayStatus.Online {
+		sb.WriteString("  Status:  Online\n")
+		sb.WriteString(fmt.Sprintf("  URL:     %s\n", gatewayStatus.URL))
+		if gatewayStatus.Version != "" {
+			sb.WriteString(fmt.Sprintf("  Version: %s\n", gatewayStatus.Version))
+		}
+		if gatewayStatus.Timestamp > 0 {
+			t := time.Unix(gatewayStatus.Timestamp, 0)
+			sb.WriteString(fmt.Sprintf("  Uptime:  %s\n", t.Format(time.RFC3339)))
+		}
+	} else {
+		sb.WriteString("  Status:  Offline\n")
+		sb.WriteString("  Tip:     Start gateway with 'goclaw gateway run'\n")
+	}
+
+	// Session status
+	sessionDir := filepath.Join(r.homeDir, ".goclaw", "sessions")
+	sb.WriteString("\nSessions:\n")
+
+	var sessionKeys []string
+	var sessionCount int
+
+	if r.sessionMgr != nil {
+		var err error
+		sessionKeys, err = r.sessionMgr.List()
+		if err != nil {
+			sb.WriteString(fmt.Sprintf("  Error: %v\n", err))
+		} else {
+			sessionCount = len(sessionKeys)
+		}
+	} else {
+		// Fallback: read directory directly
+		if entries, err := os.ReadDir(sessionDir); err == nil {
+			for _, e := range entries {
+				if !e.IsDir() && filepath.Ext(e.Name()) == ".jsonl" {
+					sessionKeys = append(sessionKeys, strings.TrimSuffix(e.Name(), ".jsonl"))
+				}
+			}
+			sessionCount = len(sessionKeys)
+		}
+	}
+
+	sb.WriteString(fmt.Sprintf("  Total:   %d\n", sessionCount))
+
+	if len(sessionKeys) > 0 {
+		sb.WriteString("\n  Recent sessions:\n")
+		limit := 5
+		if len(sessionKeys) < 5 {
+			limit = len(sessionKeys)
+		}
+
+		for i := 0; i < limit; i++ {
+			key := sessionKeys[i]
+			sb.WriteString(fmt.Sprintf("    - %s\n", key))
+
+			// Get message count if sessionMgr is available
+			if r.sessionMgr != nil {
+				if sess, err := r.sessionMgr.GetOrCreate(key); err == nil {
+					sb.WriteString(fmt.Sprintf("      Messages: %d\n", len(sess.Messages)))
+					sb.WriteString(fmt.Sprintf("      Created:  %s\n", sess.CreatedAt.Format("2006-01-02 15:04")))
+					updatedAt := time.Since(sess.UpdatedAt)
+					if updatedAt < time.Minute {
+						sb.WriteString(fmt.Sprintf("      Updated:  just now\n"))
+					} else if updatedAt < time.Hour {
+						sb.WriteString(fmt.Sprintf("      Updated:  %d min ago\n", int(updatedAt.Minutes())))
+					} else if updatedAt < 24*time.Hour {
+						sb.WriteString(fmt.Sprintf("      Updated:  %d hours ago\n", int(updatedAt.Hours())))
+					} else {
+						sb.WriteString(fmt.Sprintf("      Updated:  %s\n", sess.UpdatedAt.Format("2006-01-02 15:04")))
+					}
+				}
+			}
+		}
+
+		if sessionCount > limit {
+			sb.WriteString(fmt.Sprintf("\n  ... and %d more\n", sessionCount-limit))
+		}
+	}
+
+	// Working directory
+	pwd, _ := os.Getwd()
+	sb.WriteString(fmt.Sprintf("\nWorking Directory:\n  %s\n", pwd))
+
+	return sb.String()
+}
+
+// checkGatewayStatus checks if gateway is running
+func (r *CommandRegistry) checkGatewayStatus(timeout int) GatewayStatus {
+	result := GatewayStatus{Online: false}
+
+	ports := []int{18789, 18790, 18890}
+	client := &http.Client{
+		Timeout: time.Duration(timeout) * time.Second,
+	}
+
+	for _, port := range ports {
+		url := fmt.Sprintf("http://localhost:%d/health", port)
+		resp, err := client.Get(url)
+		if err == nil {
+			defer resp.Body.Close()
+
+			if resp.StatusCode == http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				var health map[string]interface{}
+				_ = json.Unmarshal(body, &health)
+
+				result.Online = true
+				result.URL = url
+				result.Status = "ok"
+
+				if status, ok := health["status"].(string); ok {
+					result.Status = status
+				}
+				if version, ok := health["version"].(string); ok {
+					result.Version = version
+				}
+				if ts, ok := health["time"].(float64); ok {
+					result.Timestamp = int64(ts)
+				}
+
+				break
+			}
+		}
+	}
+
+	return result
 }
 
 // Completer 自动补全器
@@ -453,7 +615,7 @@ func (r *CommandRegistry) NewCompleter() readline.AutoCompleter {
 // GetCommandPrompt 获取命令提示信息
 func (r *CommandRegistry) GetCommandPrompt() string {
 	var sb strings.Builder
-	sb.WriteString("Available commands: /quit /exit /clear /clear-sessions /help /read /cd /pwd /ls (Tab to show menu)")
+	sb.WriteString("Available commands: /quit /exit /clear /clear-sessions /help /status /read /cd /pwd /ls (Tab to show menu)")
 	return sb.String()
 }
 
