@@ -272,5 +272,17 @@ func (m *Manager) SetupFromConfig(cfg *config.Config) error {
 		}
 	}
 
+	// 钉钉通道
+	if cfg.Channels.DingTalk.Enabled && cfg.Channels.DingTalk.ClientID != "" {
+		channel, err := NewDingTalkChannel(cfg.Channels.DingTalk, m.bus)
+		if err != nil {
+			logger.Error("Failed to create DingTalk channel", zap.Error(err))
+		} else {
+			if err := m.Register(channel); err != nil {
+				logger.Error("Failed to register DingTalk channel", zap.Error(err))
+			}
+		}
+	}
+
 	return nil
 }

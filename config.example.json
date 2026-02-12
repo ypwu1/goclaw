@@ -41,6 +41,12 @@
       "secret": "",
       "token": "",
       "encoding_aes_key": ""
+    },
+    "dingtalk": {
+      "enabled": false,
+      "client_id": "",
+      "secret": "",
+      "allowed_ids": []
     }
   },
   "providers": {

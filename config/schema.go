@@ -38,6 +38,7 @@ type ChannelsConfig struct {
 	Telegram TelegramChannelConfig `mapstructure:"telegram" json:"telegram"`
 	WhatsApp WhatsAppChannelConfig `mapstructure:"whatsapp" json:"whatsapp"`
 	Feishu   FeishuChannelConfig   `mapstructure:"feishu" json:"feishu"`
+	DingTalk DingTalkChannelConfig `mapstructure:"dingtalk" json:"dingtalk"`
 	QQ       QQChannelConfig       `mapstructure:"qq" json:"qq"`
 	WeWork   WeWorkChannelConfig   `mapstructure:"wework" json:"wework"`
 }
@@ -85,6 +86,14 @@ type WeWorkChannelConfig struct {
 	EncodingAESKey string   `mapstructure:"encoding_aes_key" json:"encoding_aes_key"`
 	WebhookPort    int      `mapstructure:"webhook_port" json:"webhook_port"`
 	AllowedIDs     []string `mapstructure:"allowed_ids" json:"allowed_ids"`
+}
+
+// DingTalkChannelConfig 钉钉通道配置
+type DingTalkChannelConfig struct {
+	Enabled    bool     `mapstructure:"enabled" json:"enabled"`
+	ClientID   string   `mapstructure:"client_id" json:"client_id"`
+	ClientSecret string `mapstructure:"secret" json:"secret"`
+	AllowedIDs []string `mapstructure:"allowed_ids" json:"allowed_ids"`
 }
 
 // ProvidersConfig LLM 提供商配置
