@@ -234,3 +234,37 @@ docker-shell:
 
 ## dev: Start development environment
 dev: docker-compose-up docker-compose-logs
+
+## release-check: Check goreleaser configuration
+release-check:
+	@which goreleaser > /dev/null || (echo "goreleaser not found. Install with: brew install goreleaser" && exit 1)
+	@echo "$(COLOR_BLUE)Checking goreleaser configuration...$(COLOR_RESET)"
+	goreleaser check
+
+## release-snapshot: Build snapshot release (no publishing)
+release-snapshot:
+	@which goreleaser > /dev/null || (echo "goreleaser not found. Install with: brew install goreleaser" && exit 1)
+	@echo "$(COLOR_BLUE)Building snapshot release...$(COLOR_RESET)"
+	goreleaser build --snapshot --clean
+	@echo "$(COLOR_GREEN)Snapshot release built in dist/$(COLOR_RESET)"
+
+## release-test: Test goreleaser release process (no publishing)
+release-test:
+	@which goreleaser > /dev/null || (echo "goreleaser not found. Install with: brew install goreleaser" && exit 1)
+	@echo "$(COLOR_BLUE)Testing goreleaser release...$(COLOR_RESET)"
+	goreleaser release --snapshot --clean --skip=publish
+	@echo "$(COLOR_GREEN)Release test complete. Artifacts in dist/$(COLOR_RESET)"
+
+## release: Create and publish a new release (requires tag)
+release:
+	@echo "$(COLOR_YELLOW)To create a release:$(COLOR_RESET)"
+	@echo "  1. Create a git tag: git tag v1.0.0"
+	@echo "  2. Push the tag: git push origin v1.0.0"
+	@echo "  3. GitHub Actions will automatically build and publish"
+
+## release-notes: Generate release notes
+release-notes:
+	@which goreleaser > /dev/null || (echo "goreleaser not found. Install with: brew install goreleaser" && exit 1)
+	@echo "$(COLOR_BLUE)Generating release notes...$(COLOR_RESET)"
+	goreleaser release --release-notes=release-notes.txt --skip=publish --skip=validate --skip=announce
+

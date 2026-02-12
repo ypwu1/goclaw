@@ -24,10 +24,19 @@ import (
 	"go.uber.org/zap"
 )
 
+// Version information (populated by goreleaser)
+var Version = "dev"
+
 var rootCmd = &cobra.Command{
 	Use:   "goclaw",
 	Short: "Go-based AI Agent framework",
 	Long:  `goclaw is a Go language implementation of an AI Agent framework, inspired by nanobot.`,
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print version information",
+	Run:   runVersion,
 }
 
 var startCmd = &cobra.Command{
@@ -64,6 +73,7 @@ func init() {
 	installCmd.Flags().StringVar(&installConfigPath, "config", "", "Path to config file")
 	installCmd.Flags().StringVar(&installWorkspacePath, "workspace", "", "Path to workspace directory (overrides config)")
 
+	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(configCmd)
@@ -88,6 +98,12 @@ func init() {
 
 	// Register approvals, cron, system commands (registered via init)
 	// These commands auto-register themselves
+}
+
+// SetVersion sets the version from main package
+func SetVersion(v string) {
+	Version = v
+	rootCmd.Version = v
 }
 
 // Execute 执行 CLI
@@ -394,4 +410,12 @@ func runInstall(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Println("\nYou can now customize these files to define your agent's personality and behavior.")
+}
+
+// runVersion prints version information
+func runVersion(cmd *cobra.Command, args []string) {
+	fmt.Printf("goclaw %s\n", Version)
+	fmt.Println("Copyright (c) 2024 smallnest")
+	fmt.Println("License: MIT")
+	fmt.Println("https://github.com/smallnest/goclaw")
 }
