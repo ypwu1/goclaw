@@ -49,7 +49,6 @@ archives:
     files:
       - LICENSE
       - README.md
-    rlcp: true
 
 checksum:
   name_template: 'checksums.txt'
