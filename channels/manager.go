@@ -471,6 +471,61 @@ func (m *Manager) SetupFromConfig(cfg *config.Config) error {
 		}
 	}
 
+	// iMessage 通道
+	if cfg.Channels.IMessage.Enabled {
+		if len(cfg.Channels.IMessage.Accounts) > 0 {
+			// 多账号配置
+			for accountID, accountCfg := range cfg.Channels.IMessage.Accounts {
+				if accountCfg.Enabled {
+					imCfg := IMessageConfig{
+						BaseChannelConfig: BaseChannelConfig{
+							Enabled:    accountCfg.Enabled,
+							AccountID:  accountID,
+							Name:       accountCfg.Name,
+							AllowedIDs: accountCfg.AllowedIDs,
+						},
+						DBPath: cfg.Channels.IMessage.DBPath,
+						PollInterval: cfg.Channels.IMessage.PollInterval,
+					}
+
+					channel, err := NewIMessageChannel(imCfg, m.bus)
+					if err != nil {
+						logger.Error("Failed to create iMessage channel",
+							zap.String("account_id", accountID),
+							zap.Error(err))
+					} else {
+						channelName := buildChannelName("imessage", accountID)
+						if err := m.RegisterWithName(channel, channelName); err != nil {
+							logger.Error("Failed to register iMessage channel",
+								zap.String("account_id", accountID),
+								zap.Error(err))
+						}
+					}
+				}
+			}
+		} else {
+			// 单账号配置
+			imCfg := IMessageConfig{
+				BaseChannelConfig: BaseChannelConfig{
+					Enabled:    cfg.Channels.IMessage.Enabled,
+					AccountID:  "default",
+					AllowedIDs: cfg.Channels.IMessage.AllowedIDs,
+				},
+				DBPath:       cfg.Channels.IMessage.DBPath,
+				PollInterval: cfg.Channels.IMessage.PollInterval,
+			}
+
+			channel, err := NewIMessageChannel(imCfg, m.bus)
+			if err != nil {
+				logger.Error("Failed to create iMessage channel", zap.Error(err))
+			} else {
+				if err := m.Register(channel); err != nil {
+					logger.Error("Failed to register iMessage channel", zap.Error(err))
+				}
+			}
+		}
+	}
+
 	// 如流通道
 	if cfg.Channels.Infoflow.Enabled {
 		if len(cfg.Channels.Infoflow.Accounts) > 0 {

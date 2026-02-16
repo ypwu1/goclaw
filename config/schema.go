@@ -92,13 +92,14 @@ type BindingMatch struct {
 
 // ChannelsConfig 通道配置
 type ChannelsConfig struct {
-	Telegram TelegramChannelConfig `mapstructure:"telegram" json:"telegram"`
-	WhatsApp WhatsAppChannelConfig `mapstructure:"whatsapp" json:"whatsapp"`
-	Feishu   FeishuChannelConfig   `mapstructure:"feishu" json:"feishu"`
-	DingTalk DingTalkChannelConfig `mapstructure:"dingtalk" json:"dingtalk"`
-	QQ       QQChannelConfig       `mapstructure:"qq" json:"qq"`
-	WeWork   WeWorkChannelConfig   `mapstructure:"wework" json:"wework"`
-	Infoflow InfoflowChannelConfig `mapstructure:"infoflow" json:"infoflow"`
+	Telegram TelegramChannelConfig  `mapstructure:"telegram" json:"telegram"`
+	WhatsApp WhatsAppChannelConfig  `mapstructure:"whatsapp" json:"whatsapp"`
+	Feishu   FeishuChannelConfig    `mapstructure:"feishu" json:"feishu"`
+	DingTalk DingTalkChannelConfig  `mapstructure:"dingtalk" json:"dingtalk"`
+	QQ       QQChannelConfig        `mapstructure:"qq" json:"qq"`
+	WeWork   WeWorkChannelConfig    `mapstructure:"wework" json:"wework"`
+	Infoflow InfoflowChannelConfig  `mapstructure:"infoflow" json:"infoflow"`
+	IMessage IMessageChannelConfig  `mapstructure:"imessage" json:"imessage"`
 }
 
 // ChannelAccountConfig 通道账号配置（支持多账号）
@@ -200,6 +201,16 @@ type InfoflowChannelConfig struct {
 	AESKey      string   `mapstructure:"aes_key" json:"aes_key"`
 	WebhookPort int      `mapstructure:"webhook_port" json:"webhook_port"`
 	AllowedIDs  []string `mapstructure:"allowed_ids" json:"allowed_ids"`
+	// 多账号配置（新格式）
+	Accounts map[string]ChannelAccountConfig `mapstructure:"accounts" json:"accounts"`
+}
+
+// IMessageChannelConfig iMessage 通道配置 (macOS only)
+type IMessageChannelConfig struct {
+	Enabled      bool     `mapstructure:"enabled" json:"enabled"`
+	DBPath       string   `mapstructure:"db_path" json:"db_path"`             // 默认 ~/Library/Messages/chat.db
+	PollInterval int      `mapstructure:"poll_interval" json:"poll_interval"` // 秒，默认 3
+	AllowedIDs   []string `mapstructure:"allowed_ids" json:"allowed_ids"`     // 允许的手机号/邮箱
 	// 多账号配置（新格式）
 	Accounts map[string]ChannelAccountConfig `mapstructure:"accounts" json:"accounts"`
 }
